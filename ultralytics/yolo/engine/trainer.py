@@ -385,7 +385,15 @@ class BaseTrainer:
         """
         > Get train, val path from data dict if it exists. Returns None if data format is not recognized.
         """
-        return data["train"], data.get("val") or data.get("test")
+        train_path = data['train']
+        train_path = list()
+        path = data['train']
+        for p in path if isinstance(path, list) else [path]:
+            dataset_path = Path(p)
+            batch_lists = dataset_path.rglob("**/Images")
+            for s_batch_path in batch_lists:
+                train_path.append(str(s_batch_path))
+        return train_path, data.get("val") or data.get("test")
 
     def setup_model(self):
         """
