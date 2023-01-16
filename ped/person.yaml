@@ -1,0 +1,38 @@
+# COCO 2017 dataset http://cocodataset.org
+# Train command: python train.py --data coco.yaml
+# Default dataset location is next to /yolov5:
+#   /parent_folder
+#     /coco
+#     /yolov5
+
+
+# # train and val data as 1) directory: path/images/, 2) file: path/images.txt, or 3) list: [path1/images/, path2/images/]
+# #train: /media/xin/XHLibrary/000-Dataset/OpenDataset/Train # 118287 images
+# #val: /media/xin/XHLibrary/000-Dataset/OpenDataset/Val  # 5000 images
+# path: /data/datatmp-101/Datasets/ped  # dataset root dir
+# # train: [/data/104-1/Datasets/ped, /data/datatmp-101/Datasets/ped/train] # 118287 images
+# train: [/data/datatmp-101/Datasets/ped/obj365]
+# # train: [/data/datatmp-101/Datasets/ped/train/NuImage] # 118287 images
+
+# val: /data/datatmp-101/Datasets/ped/Val  # 5000 images
+# test:  # test images (optional)
+
+
+path: /home/xin/Dataset/person  # dataset root dir
+# train: [/data/104-1/Datasets/ped, /data/datatmp-101/Datasets/ped/train] # 118287 images
+train: [/home/xin/Dataset/Apex0516]
+# train: [/data/datatmp-101/Datasets/ped/train/NuImage] # 118287 images
+
+val: /home/xin/Dataset/person/Val  # 5000 images
+test:  # test images (optional)
+
+
+# Classes
+names:
+  0: Person
+
+# Print classes
+# with open('data/coco.yaml') as f:
+#   d = yaml.load(f, Loader=yaml.FullLoader)  # dict
+#   for i, x in enumerate(d['names']):
+#     print(i, x)
