@@ -89,7 +89,7 @@ class BasePredictor:
         self.vid_path, self.vid_writer = None, None
         self.annotator = None
         self.data_path = None
-        self.output = dict()
+        self.output = {}
         self.callbacks = defaultdict(list, {k: [v] for k, v in callbacks.default_callbacks.items()})  # add callbacks
         callbacks.add_integration_callbacks(self)
 
@@ -216,7 +216,7 @@ class BasePredictor:
         self.run_callbacks("on_predict_end")
 
     def predict_cli(self, source=None, model=None, return_outputs=False):
-        # as __call__ is a genertor now so have to treat it like a genertor
+        # as __call__ is a generator now so have to treat it like a generator
         for _ in (self.__call__(source, model, return_outputs)):
             pass
 
@@ -240,7 +240,7 @@ class BasePredictor:
                 if isinstance(self.vid_writer[idx], cv2.VideoWriter):
                     self.vid_writer[idx].release()  # release previous video writer
                 if vid_cap:  # video
-                    fps = vid_cap.get(cv2.CAP_PROP_FPS)
+                    fps = int(vid_cap.get(cv2.CAP_PROP_FPS))  # integer required, floats produce error in MP4 codec
                     w = int(vid_cap.get(cv2.CAP_PROP_FRAME_WIDTH))
                     h = int(vid_cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
                 else:  # stream

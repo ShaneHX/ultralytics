@@ -148,4 +148,6 @@ wandb/
 *_saved_model/
 *_web_model/
 *_openvino_model/
+*_paddle_model/
+
 .idea/
