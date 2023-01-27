@@ -14,7 +14,7 @@ import numpy as np
 import torch
 from PIL import ExifTags, Image, ImageOps
 
-from ultralytics.yolo.utils import DATASETS_DIR, LOGGER, ROOT, colorstr, yaml_load
+from ultralytics.yolo.utils import DATASETS_DIR, LOGGER, ROOT, colorstr, emojis, yaml_load
 from ultralytics.yolo.utils.checks import check_file, check_font, is_ascii
 from ultralytics.yolo.utils.downloads import download
 from ultralytics.yolo.utils.files import unzip_file
@@ -185,9 +185,9 @@ def polygons2masks_overlap(imgsz, segments, downsample_ratio=1):
     return masks, index
 
 
-def check_dataset_yaml(data, autodownload=True):
+def check_det_dataset(dataset, autodownload=True):
     # Download, check and/or unzip dataset if not found locally
-    data = check_file(data)
+    data = check_file(dataset)
 
     # Download (optional)
     extract_dir = ''
@@ -202,7 +202,10 @@ def check_dataset_yaml(data, autodownload=True):
 
     # Checks
     for k in 'train', 'val', 'names':
-        assert k in data, f"data.yaml '{k}:' field missing ❌"
+        if k not in data:
+            raise SyntaxError(
+                emojis(f"{dataset} '{k}:' key missing ❌.\n"
+                       f"'train', 'val' and 'names' are required in data.yaml files."))
     if isinstance(data['names'], (list, tuple)):  # old array format
         data['names'] = dict(enumerate(data['names']))  # convert to dict
     data['nc'] = len(data['names'])
@@ -227,9 +230,11 @@ def check_dataset_yaml(data, autodownload=True):
     if val:
         val = [Path(x).resolve() for x in (val if isinstance(val, list) else [val])]  # val path
         if not all(x.exists() for x in val):
-            LOGGER.info('\nDataset not found ⚠️, missing paths %s' % [str(x) for x in val if not x.exists()])
-            if not s or not autodownload:
-                raise FileNotFoundError('Dataset not found ❌')
+            msg = f"\nDataset '{dataset}' not found ⚠️, missing paths %s" % [str(x) for x in val if not x.exists()]
+            if s and autodownload:
+                LOGGER.warning(msg)
+            else:
+                raise FileNotFoundError(msg)
             t = time.time()
             if s.startswith('http') and s.endswith('.zip'):  # URL
                 f = Path(s).name  # filename
@@ -252,7 +257,7 @@ def check_dataset_yaml(data, autodownload=True):
     return data  # dictionary
 
 
-def check_dataset(dataset: str):
+def check_cls_dataset(dataset: str):
     """
     Check a classification dataset such as Imagenet.
 

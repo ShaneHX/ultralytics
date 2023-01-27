@@ -91,12 +91,10 @@ def attempt_download(file, repo='ultralytics/assets', release='v0.0.0'):
 
         file.parent.mkdir(parents=True, exist_ok=True)  # make parent dir (if required)
         if name in assets:
-            url3 = 'https://drive.google.com/drive/folders/1EFQTEUeXWSFww0luse2jB9M1QNZQGwNl'  # backup gdrive mirror
-            safe_download(
-                file,
-                url=f'https://github.com/{repo}/releases/download/{tag}/{name}',
-                min_bytes=1E5,
-                error_msg=f'{file} missing, try downloading from https://github.com/{repo}/releases/{tag} or {url3}')
+            safe_download(file,
+                          url=f'https://github.com/{repo}/releases/download/{tag}/{name}',
+                          min_bytes=1E5,
+                          error_msg=f'{file} missing, try downloading from https://github.com/{repo}/releases/{tag}')
 
         return str(file)
 
@@ -106,7 +104,7 @@ def download(url, dir=Path.cwd(), unzip=True, delete=True, curl=False, threads=1
     def download_one(url, dir):
         # Download 1 file
         success = True
-        if Path(url).is_file():
+        if '://' not in str(url) and Path(url).is_file():  # exists ('://' check required in Windows Python<3.10)
             f = Path(url)  # filename
         else:  # does not exist
             f = dir / Path(url).name
@@ -141,10 +139,14 @@ def download(url, dir=Path.cwd(), unzip=True, delete=True, curl=False, threads=1
     dir = Path(dir)
     dir.mkdir(parents=True, exist_ok=True)  # make directory
     if threads > 1:
-        pool = ThreadPool(threads)
-        pool.imap(lambda x: download_one(*x), zip(url, repeat(dir)))  # multithreaded
-        pool.close()
-        pool.join()
+        # pool = ThreadPool(threads)
+        # pool.imap(lambda x: download_one(*x), zip(url, repeat(dir)))  # multithreaded
+        # pool.close()
+        # pool.join()
+        with ThreadPool(threads) as pool:
+            pool.imap(lambda x: download_one(*x), zip(url, repeat(dir)))  # multithreaded
+            pool.close()
+            pool.join()
     else:
         for u in [url] if isinstance(url, (str, Path)) else url:
             download_one(u, dir)

@@ -2,6 +2,10 @@
 
 from pathlib import Path
 
+import cv2
+import torch
+from PIL import Image
+
 from ultralytics import YOLO
 from ultralytics.yolo.utils import ROOT, SETTINGS
 
@@ -33,6 +37,23 @@ def test_model_fuse():
 def test_predict_dir():
     model = YOLO(MODEL)
     model.predict(source=ROOT / "assets")
+
+
+def test_predict_img():
+    model = YOLO(MODEL)
+    img = Image.open(str(SOURCE))
+    output = model(source=img, save=True, verbose=True)  # PIL
+    assert len(output) == 1, "predict test failed"
+    img = cv2.imread(str(SOURCE))
+    output = model(source=img, save=True, save_txt=True)  # ndarray
+    assert len(output) == 1, "predict test failed"
+    output = model(source=[img, img], save=True, save_txt=True)  # batch
+    assert len(output) == 2, "predict test failed"
+    output = model(source=[img, img], save=True, stream=True)  # stream
+    assert len(list(output)) == 2, "predict test failed"
+    tens = torch.zeros(320, 640, 3)
+    output = model(tens.numpy())
+    assert len(output) == 1, "predict test failed"
 
 
 def test_val():
@@ -90,9 +111,11 @@ def test_export_coreml():
     model.export(format='coreml')
 
 
-def test_export_paddle():
-    model = YOLO(MODEL)
-    model.export(format='paddle')
+def test_export_paddle(enabled=False):
+    # Paddle protobuf requirements conflicting with onnx protobuf requirements
+    if enabled:
+        model = YOLO(MODEL)
+        model.export(format='paddle')
 
 
 def test_all_model_yamls():
