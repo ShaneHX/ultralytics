@@ -22,7 +22,6 @@ class DetectionValidator(BaseValidator):
     def __init__(self, dataloader=None, save_dir=None, pbar=None, logger=None, args=None):
         super().__init__(dataloader, save_dir, pbar, logger, args)
         self.args.task = 'detect'
-        self.data_dict = yaml_load(check_file(self.args.data), append_filename=True) if self.args.data else None
         self.is_coco = False
         self.class_map = None
         self.metrics = DetMetrics(save_dir=self.save_dir)
@@ -129,7 +128,7 @@ class DetectionValidator(BaseValidator):
                 f'WARNING ⚠️ no labels found in {self.args.task} set, can not compute metrics without labels')
 
         # Print results per class
-        if (self.args.verbose or not self.training) and self.nc > 1 and len(self.stats):
+        if self.args.verbose and not self.training and self.nc > 1 and len(self.stats):
             for i, c in enumerate(self.metrics.ap_class_index):
                 self.logger.info(pf % (self.names[c], self.seen, self.nt_per_class[c], *self.metrics.class_result(i)))
 
@@ -172,7 +171,7 @@ class DetectionValidator(BaseValidator):
                                  hyp=vars(self.args),
                                  cache=False,
                                  pad=0.5,
-                                 rect=True,
+                                 rect=self.args.rect,
                                  workers=self.args.workers,
                                  prefix=colorstr(f'{self.args.mode}: '),
                                  shuffle=False,
@@ -237,7 +236,7 @@ def val(cfg=DEFAULT_CFG, use_python=False):
     model = cfg.model or "yolov8n.pt"
     data = cfg.data or "coco128.yaml"
 
-    args = dict(model=model, data=data, verbose=True)
+    args = dict(model=model, data=data)
     if use_python:
         from ultralytics import YOLO
         YOLO(model).val(**args)

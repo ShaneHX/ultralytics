@@ -1,5 +1,4 @@
 # Ultralytics YOLO 🚀, GPL-3.0 license
-import sys
 
 import torch
 import torchvision
@@ -9,7 +8,7 @@ from ultralytics.yolo import v8
 from ultralytics.yolo.data import build_classification_dataloader
 from ultralytics.yolo.engine.trainer import BaseTrainer
 from ultralytics.yolo.utils import DEFAULT_CFG
-from ultralytics.yolo.utils.torch_utils import strip_optimizer
+from ultralytics.yolo.utils.torch_utils import strip_optimizer, is_parallel
 
 
 class ClassificationTrainer(BaseTrainer):
@@ -56,7 +55,7 @@ class ClassificationTrainer(BaseTrainer):
         # Load a YOLO model locally, from torchvision, or from Ultralytics assets
         if model.endswith(".pt"):
             self.model, _ = attempt_load_one_weight(model, device='cpu')
-            for p in model.parameters():
+            for p in self.model.parameters():
                 p.requires_grad = True  # for training
         elif model.endswith(".yaml"):
             self.model = self.get_model(cfg=model)
@@ -75,8 +74,12 @@ class ClassificationTrainer(BaseTrainer):
                                                  augment=mode == "train",
                                                  rank=rank,
                                                  workers=self.args.workers)
+        # Attach inference transforms
         if mode != "train":
-            self.model.transforms = loader.dataset.torch_transforms  # attach inference transforms
+            if is_parallel(self.model):
+                self.model.module.transforms = loader.dataset.torch_transforms
+            else:
+                self.model.transforms = loader.dataset.torch_transforms
         return loader
 
     def preprocess_batch(self, batch):
@@ -141,12 +144,12 @@ def train(cfg=DEFAULT_CFG, use_python=False):
     data = cfg.data or "mnist160"  # or yolo.ClassificationDataset("mnist")
     device = cfg.device if cfg.device is not None else ''
 
-    args = dict(model=model, data=data, device=device, verbose=True)
+    args = dict(model=model, data=data, device=device)
     if use_python:
         from ultralytics import YOLO
         YOLO(model).train(**args)
     else:
-        trainer = ClassificationTrainer(args)
+        trainer = ClassificationTrainer(overrides=args)
         trainer.train()
 
 

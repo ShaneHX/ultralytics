@@ -28,7 +28,6 @@ DEFAULT_CFG_PATH = ROOT / "yolo/cfg/default.yaml"
 RANK = int(os.getenv('RANK', -1))
 NUM_THREADS = min(8, max(1, os.cpu_count() - 1))  # number of YOLOv5 multiprocessing threads
 AUTOINSTALL = str(os.getenv('YOLO_AUTOINSTALL', True)).lower() == 'true'  # global auto-install mode
-FONT = 'Arial.ttf'  # https://ultralytics.com/assets/Arial.ttf
 VERBOSE = str(os.getenv('YOLO_VERBOSE', True)).lower() == 'true'  # global verbose mode
 TQDM_BAR_FORMAT = '{l_bar}{bar:10}{r_bar}'  # tqdm bar format
 LOGGING_NAME = 'ultralytics'
@@ -132,7 +131,11 @@ def yaml_save(file='data.yaml', data=None):
 
     with open(file, 'w') as f:
         # Dump data to file in YAML format, converting Path objects to strings
-        yaml.safe_dump({k: str(v) if isinstance(v, Path) else v for k, v in data.items()}, f, sort_keys=False)
+        yaml.safe_dump({k: str(v) if isinstance(v, Path) else v
+                        for k, v in data.items()},
+                       f,
+                       sort_keys=False,
+                       allow_unicode=True)
 
 
 def yaml_load(file='data.yaml', append_filename=False):
@@ -165,7 +168,7 @@ def yaml_print(yaml_file: Union[str, Path, dict]) -> None:
         None
     """
     yaml_dict = yaml_load(yaml_file) if isinstance(yaml_file, (str, Path)) else yaml_file
-    dump = yaml.dump(yaml_dict, default_flow_style=False)
+    dump = yaml.dump(yaml_dict, sort_keys=False, allow_unicode=True)
     LOGGER.info(f"Printing '{colorstr('bold', 'black', yaml_file)}'\n\n{dump}")
 
 
@@ -328,6 +331,20 @@ def get_git_origin_url():
     return None  # if not git dir or on error
 
 
+def get_git_branch():
+    """
+    Returns the current git branch name. If not in a git repository, returns None.
+
+    Returns:
+        (str) or (None): The current git branch name.
+    """
+    if is_git_dir():
+        with contextlib.suppress(subprocess.CalledProcessError):
+            origin = subprocess.check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"])
+            return origin.decode().strip()
+    return None  # if not git dir or on error
+
+
 def get_default_args(func):
     # Get func() default arguments
     signature = inspect.signature(func)
@@ -454,6 +471,13 @@ def set_sentry():
     """
 
     def before_send(event, hint):
+        if 'exc_info' in hint:
+            exc_type, exc_value, tb = hint['exc_info']
+            if exc_type in (KeyboardInterrupt, FileNotFoundError) \
+                    or 'out of memory' in str(exc_value) \
+                    or not sys.argv[0].endswith('yolo'):
+                return None  # do not send event
+
         env = 'Colab' if is_colab() else 'Kaggle' if is_kaggle() else 'Jupyter' if is_jupyter() else \
             'Docker' if is_docker() else platform.system()
         event['tags'] = {
@@ -464,23 +488,33 @@ def set_sentry():
         return event
 
     if SETTINGS['sync'] and \
+            RANK in {-1, 0} and \
+            sys.argv[0].endswith('yolo') and \
             not is_pytest_running() and \
             not is_github_actions_ci() and \
-            (is_pip_package() or get_git_origin_url() == "https://github.com/ultralytics/ultralytics.git"):
-        import sentry_sdk  # noqa
+            ((is_pip_package() and not is_git_dir()) or
+             (get_git_origin_url() == "https://github.com/ultralytics/ultralytics.git" and get_git_branch() == "main")):
 
-        import ultralytics
+        import hashlib
+        import sentry_sdk  # noqa
+        from ultralytics import __version__
+
         sentry_sdk.init(
-            dsn="https://1f331c322109416595df20a91f4005d3@o4504521589325824.ingest.sentry.io/4504521592406016",
+            dsn="https://f805855f03bb4363bc1e16cb7d87b654@o4504521589325824.ingest.sentry.io/4504521592406016",
             debug=False,
             traces_sample_rate=1.0,
-            release=ultralytics.__version__,
+            release=__version__,
             environment='production',  # 'dev' or 'production'
             before_send=before_send,
-            ignore_errors=[KeyboardInterrupt])
+            ignore_errors=[KeyboardInterrupt, FileNotFoundError])
+        sentry_sdk.set_user({"id": SETTINGS['uuid']})
+
+        # Disable all sentry logging
+        for logger in "sentry_sdk", "sentry_sdk.errors":
+            logging.getLogger(logger).setLevel(logging.CRITICAL)
 
 
-def get_settings(file=USER_CONFIG_DIR / 'settings.yaml', version='0.0.1'):
+def get_settings(file=USER_CONFIG_DIR / 'settings.yaml', version='0.0.2'):
     """
     Loads a global Ultralytics settings YAML file or creates one with default values if it does not exist.
 
@@ -491,6 +525,7 @@ def get_settings(file=USER_CONFIG_DIR / 'settings.yaml', version='0.0.1'):
     Returns:
         dict: Dictionary of settings key-value pairs.
     """
+    import hashlib
     from ultralytics.yolo.utils.checks import check_version
     from ultralytics.yolo.utils.torch_utils import torch_distributed_zero_first
 
@@ -502,7 +537,7 @@ def get_settings(file=USER_CONFIG_DIR / 'settings.yaml', version='0.0.1'):
         'weights_dir': str(root / 'weights'),  # default weights directory.
         'runs_dir': str(root / 'runs'),  # default runs directory.
         'sync': True,  # sync analytics to help with YOLO development
-        'uuid': uuid.getnode(),  # device UUID to align analytics
+        'uuid': hashlib.sha256(str(uuid.getnode()).encode()).hexdigest(),  # anonymized uuid hash
         'settings_version': version}  # Ultralytics settings version
 
     with torch_distributed_zero_first(RANK):
@@ -516,10 +551,9 @@ def get_settings(file=USER_CONFIG_DIR / 'settings.yaml', version='0.0.1'):
             and all(type(a) == type(b) for a, b in zip(settings.values(), defaults.values())) \
             and check_version(settings['settings_version'], version)
         if not correct:
-            LOGGER.warning('WARNING ⚠️ Ultralytics settings reset to defaults. '
-                           '\nThis is normal and may be due to a recent ultralytics package update, '
-                           'but may have overwritten previous settings. '
-                           f"\nYou may view and update settings directly in '{file}'")
+            LOGGER.warning('WARNING ⚠️ Ultralytics settings reset to defaults. This is normal and may be due to a '
+                           'recent ultralytics package update, but may have overwritten previous settings. '
+                           f"\nView and update settings with 'yolo settings' or at '{file}'")
             settings = defaults  # merge **defaults with **settings (prefer **settings)
             yaml_save(file, settings)  # save updated defaults
 

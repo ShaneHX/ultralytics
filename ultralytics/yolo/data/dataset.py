@@ -113,13 +113,15 @@ class YOLODataset(BaseDataset):
             tqdm(None, desc=self.prefix + d, total=n, initial=n, bar_format=TQDM_BAR_FORMAT)  # display cache results
             if cache["msgs"]:
                 LOGGER.info("\n".join(cache["msgs"]))  # display warnings
-        assert nf > 0, f"{self.prefix}No labels found in {cache_path}, can not start training. {HELP_URL}"
+        if nf == 0:  # number of labels found
+            raise FileNotFoundError(f"{self.prefix}No labels found in {cache_path}, can not start training. {HELP_URL}")
 
         # Read cache
         [cache.pop(k) for k in ("hash", "version", "msgs")]  # remove items
         labels = cache["labels"]
 
         # Check if the dataset is all boxes or all segments
+        len_cls = sum(len(lb["cls"]) for lb in labels)
         len_boxes = sum(len(lb["bboxes"]) for lb in labels)
         len_segments = sum(len(lb["segments"]) for lb in labels)
         if len_segments and len_boxes != len_segments:
@@ -129,15 +131,16 @@ class YOLODataset(BaseDataset):
                 "To avoid this please supply either a detect or segment dataset, not a detect-segment mixed dataset.")
             for lb in labels:
                 lb["segments"] = []
-        nl = len(np.concatenate([label["cls"] for label in labels], 0))  # number of labels
-        assert nl > 0, f"{self.prefix}All labels empty in {cache_path}, can not start training. {HELP_URL}"
+        if len_cls == 0:
+            raise ValueError(f"All labels empty in {cache_path}, can not start training without labels. {HELP_URL}")
         return labels
 
     # TODO: use hyp config to set all these augmentations
     def build_transforms(self, hyp=None):
         if self.augment:
-            mosaic = self.augment and not self.rect
-            transforms = mosaic_transforms(self, self.imgsz, hyp) if mosaic else affine_transforms(self.imgsz, hyp)
+            hyp.mosaic = hyp.mosaic if self.augment and not self.rect else 0.0
+            hyp.mixup = hyp.mixup if self.augment and not self.rect else 0.0
+            transforms = v8_transforms(self, self.imgsz, hyp)
         else:
             transforms = Compose([LetterBox(new_shape=(self.imgsz, self.imgsz), scaleup=False)])
         transforms.append(
@@ -151,15 +154,10 @@ class YOLODataset(BaseDataset):
         return transforms
 
     def close_mosaic(self, hyp):
-        self.transforms = affine_transforms(self.imgsz, hyp)
-        self.transforms.append(
-            Format(bbox_format="xywh",
-                   normalize=True,
-                   return_mask=self.use_segments,
-                   return_keypoint=self.use_keypoints,
-                   batch_idx=True,
-                   mask_ratio=hyp.mask_ratio,
-                   mask_overlap=hyp.overlap_mask))
+        hyp.mosaic = 0.0  # set mosaic ratio=0.0
+        hyp.copy_paste = 0.0  # keep the same behavior as previous v8 close-mosaic
+        hyp.mixup = 0.0  # keep the same behavior as previous v8 close-mosaic
+        self.transforms = self.build_transforms(hyp)
 
     def update_labels_info(self, label):
         """custom your label format here"""
@@ -175,8 +173,6 @@ class YOLODataset(BaseDataset):
 
     @staticmethod
     def collate_fn(batch):
-        # TODO: returning a dict can make thing easier and cleaner when using dataset in training
-        # but I don't know if this will slow down a little bit.
         new_batch = {}
         keys = batch[0].keys()
         values = list(zip(*[list(b.values()) for b in batch]))
