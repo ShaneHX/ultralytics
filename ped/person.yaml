@@ -20,10 +20,10 @@
 
 path: /home/xin/Dataset/person  # dataset root dir
 # train: [/data/104-1/Datasets/ped, /data/datatmp-101/Datasets/ped/train] # 118287 images
-train: [/home/xin/Dataset/Apex0516]
+train: [/home/xin/Dataset/Apex]
 # train: [/data/datatmp-101/Datasets/ped/train/NuImage] # 118287 images
 
-val: /home/xin/Dataset/person/Val  # 5000 images
+val: /home/xin/Dataset/person_demo/Val  # 5000 images
 test:  # test images (optional)
 
 
