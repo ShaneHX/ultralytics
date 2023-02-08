@@ -81,7 +81,7 @@ class DetectionPredictor(BasePredictor):
         return log_string
 
 
-def predict(cfg=DEFAULT_CFG, use_python=True):
+def predict(cfg=DEFAULT_CFG, use_python=False):
     model = cfg.model or "yolov8n.pt"
     source = cfg.source if cfg.source is not None else ROOT / "assets" if (ROOT / "assets").exists() \
         else "https://ultralytics.com/images/bus.jpg"

@@ -201,7 +201,7 @@ class Loss:
         return loss.sum() * batch_size, loss.detach()  # loss(box, cls, dfl)
 
 
-def train(cfg=DEFAULT_CFG, use_python=True):
+def train(cfg=DEFAULT_CFG, use_python=False):
     model = cfg.model or "yolov8n.pt"
     data = cfg.data or "coco128.yaml"  # or yolo.ClassificationDataset("mnist")
     device = cfg.device if cfg.device is not None else ''

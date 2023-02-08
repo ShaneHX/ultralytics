@@ -152,3 +152,4 @@ weights/
 *_paddle_model/
 
 .idea/
+app/
